@@ -69,6 +69,16 @@ var compilerIntrinsics = map[string]map[string]bool{
 {{- end }}
 }
 
+// blockedLinknamePkgs contains packages listed in the linker's blockedLinknames map.
+// The Go linker restricts which packages can use //go:linkname to reference certain
+// runtime symbols, checking packages by their import path. We must not obfuscate
+// these import paths as the linker's allowlist would no longer match.
+var blockedLinknamePkgs = map[string]bool{
+{{- range $path := .BlockedLinknamePkgs }}
+	"{{ $path.String }}": true, // {{ $path.GoVersionLang }}
+{{- end }}
+}
+
 var reflectSkipPkg = map[string]bool{
 	"fmt": true,
 }
@@ -79,6 +89,7 @@ type tmplData struct {
 	RuntimeAndDeps      []versionedString
 	RuntimeAndLinknamed []versionedString
 	CompilerIntrinsics  []tmplIntrinsic
+	BlockedLinknamePkgs []versionedString
 }
 
 type tmplIntrinsic struct {
@@ -147,20 +158,51 @@ func lines(vs versionedString) []versionedString {
 }
 
 var rxLinkname = regexp.MustCompile(`^//go:linkname .* ([^.]*)\.[^.]*$`)
-var rxIntrinsic = regexp.MustCompile(`\b(addF|alias)\("([^"]*)", "([^"]*)",`)
+var rxIntrinsic = regexp.MustCompile(`\b(add|addF|alias)\("([^"]*)", "([^"]*)",`)
+var rxBlockedLinknameValue = regexp.MustCompile(`"([^"]+)"[,}]`)
+var rxPkgSpecialEntry = regexp.MustCompile(`^\t"([^"]+)",$`)
 
 func main() {
 	var runtimeAndDeps []versionedString
 	for _, goVersion := range goVersions {
 		runtimeAndDeps = append(runtimeAndDeps, lines(cmdGo(goVersion, "list", "-deps", "runtime"))...)
 	}
-	slices.SortFunc(runtimeAndDeps, versionedString.Compare)
-	runtimeAndDeps = slices.CompactFunc(runtimeAndDeps, versionedString.Equal)
 
 	var goroots []versionedString
 	for _, goVersion := range goVersions {
 		goroots = append(goroots, cmdGo(goVersion, "env", "GOROOT"))
 	}
+
+	// Also include packages from the runtimePkgs list in pkgspecial.go,
+	// as those are runtime packages that may not appear in `go list -deps`
+	// on all platforms (e.g. internal/runtime/cgroup is Linux-specific).
+	for _, goroot := range goroots {
+		pkgSpecialSrc := readFile(filepath.Join(
+			goroot.String, "src", "cmd", "internal", "objabi", "pkgspecial.go",
+		))
+		inRuntimePkgs := false
+		for line := range strings.SplitSeq(pkgSpecialSrc, "\n") {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "var runtimePkgs") {
+				inRuntimePkgs = true
+				continue
+			}
+			if inRuntimePkgs {
+				if trimmed == "}" {
+					break
+				}
+				if m := rxPkgSpecialEntry.FindStringSubmatch(line); m != nil {
+					runtimeAndDeps = append(runtimeAndDeps, versionedString{
+						String:        m[1],
+						GoVersionLang: goroot.GoVersionLang,
+					})
+				}
+			}
+		}
+	}
+
+	slices.SortFunc(runtimeAndDeps, versionedString.Compare)
+	runtimeAndDeps = slices.CompactFunc(runtimeAndDeps, versionedString.Equal)
 
 	// All packages that the runtime linknames to, except runtime and its dependencies.
 	// This resulting list is what we need to "go list" when obfuscating the runtime,
@@ -207,7 +249,7 @@ func main() {
 				String:        name,
 				GoVersionLang: goroot.GoVersionLang,
 			}
-			if i := compilerIntrinsicsIndexByPath[path]; i == 0 {
+			if i, ok := compilerIntrinsicsIndexByPath[path]; !ok {
 				compilerIntrinsicsIndexByPath[path] = len(compilerIntrinsics)
 				compilerIntrinsics = append(compilerIntrinsics, tmplIntrinsic{
 					Path:  path,
@@ -226,12 +268,53 @@ func main() {
 		intr.Names = slices.CompactFunc(intr.Names, versionedString.Equal)
 	}
 
+	// Collect packages from the linker's blockedLinknames map.
+	// The Go linker restricts which packages can use //go:linkname to reference
+	// certain runtime symbols. The allowed packages are listed as values in
+	// the blockedLinknames map. We must not obfuscate these package import paths
+	// as the linker checks them by name.
+	var blockedLinknamePkgs []versionedString
+	for _, goroot := range goroots {
+		loaderSrc := readFile(filepath.Join(
+			goroot.String, "src", "cmd", "link", "internal", "loader", "loader.go",
+		))
+		inMap := false
+		for line := range strings.SplitSeq(loaderSrc, "\n") {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "var blockedLinknames") {
+				inMap = true
+				continue
+			}
+			if inMap {
+				if trimmed == "}" {
+					break
+				}
+				// Extract package names from the value side: {"pkg1", "pkg2"}
+				idx := strings.Index(line, "{")
+				if idx < 0 {
+					continue
+				}
+				valuePart := line[idx:]
+				for _, m := range rxBlockedLinknameValue.FindAllStringSubmatch(valuePart, -1) {
+					pkg := m[1]
+					blockedLinknamePkgs = append(blockedLinknamePkgs, versionedString{
+						String:        pkg,
+						GoVersionLang: goroot.GoVersionLang,
+					})
+				}
+			}
+		}
+	}
+	slices.SortFunc(blockedLinknamePkgs, versionedString.Compare)
+	blockedLinknamePkgs = slices.CompactFunc(blockedLinknamePkgs, versionedString.Equal)
+
 	var buf bytes.Buffer
 	if err := tmplTables.Execute(&buf, tmplData{
 		GoVersions:          goVersions,
 		RuntimeAndDeps:      runtimeAndDeps,
 		RuntimeAndLinknamed: runtimeAndLinknamed,
 		CompilerIntrinsics:  compilerIntrinsics,
+		BlockedLinknamePkgs: blockedLinknamePkgs,
 	}); err != nil {
 		panic(err)
 	}

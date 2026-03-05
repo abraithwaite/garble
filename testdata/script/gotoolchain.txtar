@@ -4,9 +4,10 @@
 # setting up a `go` directive with its Go version.
 go env GOVERSION
 setenvfile GOVERSION_UPGRADE stdout
+setenv-trimprefix GOVERSION_NUMBER GOVERSION_UPGRADE go
 cd mod
 go mod init test
-go mod edit -go=${GOVERSION_UPGRADE}
+go mod edit -go=${GOVERSION_NUMBER}
 cd ..
 
 # To test that garble works with transparent upgrades via GOTOOLCHAIN,

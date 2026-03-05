@@ -1115,7 +1115,13 @@ func (tf *transformer) transformGoFile(file *ast.File) *ast.File {
 	// We can't obfuscate literals in the runtime and its dependencies,
 	// because obfuscated literals sometimes escape to heap,
 	// and that's not allowed in the runtime itself.
-	if flagLiterals && tf.curPkg.ToObfuscate {
+	// We also skip crypto/internal/fips140 packages, because their data
+	// is placed in special FIPS sections that restrict relocations.
+	// We skip the reflect package because literal obfuscation can cause
+	// nosplit stack overflows in its functions.
+	if flagLiterals && tf.curPkg.ToObfuscate &&
+		tf.curPkg.ImportPath != "reflect" &&
+		!strings.HasPrefix(tf.curPkg.ImportPath, "crypto/internal/fips140") {
 		file = literals.Obfuscate(tf.obfRand, file, tf.info, tf.linkerVariableStrings, randomName)
 
 		// some imported constants might not be needed anymore, remove unnecessary imports

@@ -7,36 +7,37 @@ package main
 // runtimeAndDeps contains the runtime package and all of its transitive dependencies
 // as reported by 'go list -deps'.
 var runtimeAndDeps = map[string]bool{
-	"internal/abi":                   true, // go1.26
-	"internal/asan":                  true, // go1.26
-	"internal/bytealg":               true, // go1.26
-	"internal/byteorder":             true, // go1.26
-	"internal/chacha8rand":           true, // go1.26
-	"internal/coverage/rtcov":        true, // go1.26
-	"internal/cpu":                   true, // go1.26
-	"internal/goarch":                true, // go1.26
-	"internal/godebugs":              true, // go1.26
-	"internal/goexperiment":          true, // go1.26
-	"internal/goos":                  true, // go1.26
-	"internal/msan":                  true, // go1.26
-	"internal/profilerecord":         true, // go1.26
-	"internal/race":                  true, // go1.26
-	"internal/runtime/atomic":        true, // go1.26
-	"internal/runtime/cgroup":        true, // go1.26
-	"internal/runtime/exithook":      true, // go1.26
-	"internal/runtime/gc":            true, // go1.26
-	"internal/runtime/gc/scan":       true, // go1.26
-	"internal/runtime/maps":          true, // go1.26
-	"internal/runtime/math":          true, // go1.26
-	"internal/runtime/pprof/label":   true, // go1.26
-	"internal/runtime/sys":           true, // go1.26
-	"internal/runtime/syscall/linux": true, // go1.26
-	"internal/strconv":               true, // go1.26
-	"internal/stringslite":           true, // go1.26
-	"internal/trace/tracev2":         true, // go1.26
-	"math/bits":                      true, // go1.26
-	"runtime":                        true, // go1.26
-	"unsafe":                         true, // go1.26
+	"internal/abi":                     true, // go1.26
+	"internal/asan":                    true, // go1.26
+	"internal/bytealg":                 true, // go1.26
+	"internal/byteorder":               true, // go1.26
+	"internal/chacha8rand":             true, // go1.26
+	"internal/coverage/rtcov":          true, // go1.26
+	"internal/cpu":                     true, // go1.26
+	"internal/goarch":                  true, // go1.26
+	"internal/godebugs":                true, // go1.26
+	"internal/goexperiment":            true, // go1.26
+	"internal/goos":                    true, // go1.26
+	"internal/msan":                    true, // go1.26
+	"internal/profilerecord":           true, // go1.26
+	"internal/race":                    true, // go1.26
+	"internal/runtime/atomic":          true, // go1.26
+	"internal/runtime/cgroup":          true, // go1.26
+	"internal/runtime/exithook":        true, // go1.26
+	"internal/runtime/gc":              true, // go1.26
+	"internal/runtime/gc/scan":         true, // go1.26
+	"internal/runtime/maps":            true, // go1.26
+	"internal/runtime/math":            true, // go1.26
+	"internal/runtime/pprof/label":     true, // go1.26
+	"internal/runtime/sys":             true, // go1.26
+	"internal/runtime/syscall/linux":   true, // go1.26
+	"internal/runtime/syscall/windows": true, // go1.26
+	"internal/strconv":                 true, // go1.26
+	"internal/stringslite":             true, // go1.26
+	"internal/trace/tracev2":           true, // go1.26
+	"math/bits":                        true, // go1.26
+	"runtime":                          true, // go1.26
+	"unsafe":                           true, // go1.26
 }
 
 // runtimeAndLinknamed contains the runtime package and all the packages
@@ -100,6 +101,10 @@ var runtimeAndLinknamed = []string{
 }
 
 var compilerIntrinsics = map[string]map[string]bool{
+	"crypto/internal/constanttime": {
+		"Select":      true, // go1.26
+		"boolToUint8": true, // go1.26
+	},
 	"internal/runtime/atomic": {
 		"And":             true, // go1.26
 		"And32":           true, // go1.26
@@ -162,11 +167,16 @@ var compilerIntrinsics = map[string]map[string]bool{
 		"ctrlGroupMatchH2":             true, // go1.26
 	},
 	"internal/runtime/math": {
+		"Add64":      true, // go1.26
+		"Mul64":      true, // go1.26
 		"MulUintptr": true, // go1.26
 	},
 	"internal/runtime/sys": {
 		"Bswap32":          true, // go1.26
 		"Bswap64":          true, // go1.26
+		"GetCallerPC":      true, // go1.26
+		"GetCallerSP":      true, // go1.26
+		"GetClosurePtr":    true, // go1.26
 		"Len64":            true, // go1.26
 		"Len8":             true, // go1.26
 		"OnesCount64":      true, // go1.26
@@ -201,6 +211,7 @@ var compilerIntrinsics = map[string]map[string]bool{
 		"Len64":           true, // go1.26
 		"Len8":            true, // go1.26
 		"Mul":             true, // go1.26
+		"Mul64":           true, // go1.26
 		"OnesCount":       true, // go1.26
 		"OnesCount16":     true, // go1.26
 		"OnesCount32":     true, // go1.26
@@ -227,8 +238,10 @@ var compilerIntrinsics = map[string]map[string]bool{
 		"TrailingZeros8":  true, // go1.26
 	},
 	"runtime": {
-		"memequal":           true, // go1.26
-		"publicationBarrier": true, // go1.26
+		"KeepAlive":            true, // go1.26
+		"memequal":             true, // go1.26
+		"publicationBarrier":   true, // go1.26
+		"slicebytetostringtmp": true, // go1.26
 	},
 	"sync": {
 		"runtime_LoadAcquintptr":  true, // go1.26
@@ -272,6 +285,38 @@ var compilerIntrinsics = map[string]map[string]bool{
 		"SwapUint64":            true, // go1.26
 		"SwapUintptr":           true, // go1.26
 	},
+}
+
+// blockedLinknamePkgs contains packages listed in the linker's blockedLinknames map.
+// The Go linker restricts which packages can use //go:linkname to reference certain
+// runtime symbols, checking packages by their import path. We must not obfuscate
+// these import paths as the linker's allowlist would no longer match.
+var blockedLinknamePkgs = map[string]bool{
+	"crypto/fips140":                true, // go1.26
+	"crypto/internal/fips140":       true, // go1.26
+	"crypto/internal/fips140/check": true, // go1.26
+	"crypto/internal/sysrand":       true, // go1.26
+	"crypto/rand":                   true, // go1.26
+	"crypto/subtle":                 true, // go1.26
+	"internal/cpu":                  true, // go1.26
+	"internal/runtime/cgroup":       true, // go1.26
+	"internal/runtime/maps":         true, // go1.26
+	"internal/sync":                 true, // go1.26
+	"internal/synctest":             true, // go1.26
+	"iter":                          true, // go1.26
+	"net":                           true, // go1.26
+	"reflect":                       true, // go1.26
+	"runtime":                       true, // go1.26
+	"runtime/pprof":                 true, // go1.26
+	"runtime/secret":                true, // go1.26
+	"runtime/trace":                 true, // go1.26
+	"sync":                          true, // go1.26
+	"sync_test":                     true, // go1.26
+	"syscall":                       true, // go1.26
+	"testing/cryptotest":            true, // go1.26
+	"testing/synctest":              true, // go1.26
+	"time":                          true, // go1.26
+	"unique":                        true, // go1.26
 }
 
 var reflectSkipPkg = map[string]bool{

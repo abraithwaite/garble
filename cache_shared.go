@@ -255,6 +255,11 @@ func (p *listedPackage) obfuscatedImportPath() string {
 	if _, ok := compilerIntrinsics[p.ImportPath]; ok {
 		return p.ImportPath
 	}
+	// The Go linker restricts which packages can use //go:linkname
+	// to reference certain runtime symbols, checking by import path.
+	if blockedLinknamePkgs[p.ImportPath] {
+		return p.ImportPath
+	}
 	newPath := hashWithPackage(p, p.ImportPath)
 	log.Printf("import path %q hashed with %x to %q", p.ImportPath, p.GarbleActionID, newPath)
 	return newPath

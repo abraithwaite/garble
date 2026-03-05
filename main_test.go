@@ -140,13 +140,14 @@ func TestScript(t *testing.T) {
 			return false, fmt.Errorf("unknown condition")
 		},
 		Cmds: map[string]func(ts *testscript.TestScript, neg bool, args []string){
-			"sleep":             sleep,
-			"binsubstr":         binsubstr,
-			"bincmp":            bincmp,
-			"generate-literals": generateLiterals,
-			"setenvfile":        setenvfile,
-			"grepfiles":         grepfiles,
-			"setup-go":          setupGo,
+			"sleep":              sleep,
+			"binsubstr":          binsubstr,
+			"bincmp":             bincmp,
+			"generate-literals":  generateLiterals,
+			"setenvfile":         setenvfile,
+			"setenv-trimprefix":  setenvTrimprefix,
+			"grepfiles":          grepfiles,
+			"setup-go":           setupGo,
 		},
 		UpdateScripts:       *update,
 		RequireExplicitExec: true,
@@ -351,6 +352,16 @@ func generateLiterals(ts *testscript.TestScript, neg bool, args []string) {
 	if err := printer.Fprint(codeFile, token.NewFileSet(), file); err != nil {
 		ts.Fatalf("%v", err)
 	}
+}
+
+func setenvTrimprefix(ts *testscript.TestScript, neg bool, args []string) {
+	if neg {
+		ts.Fatalf("unsupported: ! setenv-trimprefix")
+	}
+	if len(args) != 3 {
+		ts.Fatalf("usage: setenv-trimprefix name envvar prefix")
+	}
+	ts.Setenv(args[0], strings.TrimPrefix(strings.TrimSpace(ts.Getenv(args[1])), args[2]))
 }
 
 func setenvfile(ts *testscript.TestScript, neg bool, args []string) {
